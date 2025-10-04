@@ -43,7 +43,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define MAX_STRING_LEN 32
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -61,18 +61,31 @@ TIM_HandleTypeDef htim2;
 volatile uint32_t count = 0;
 volatile uint8_t sleep_flag = 0;
 volatile uint16_t cell_mv[5];
-volatile uint16_t cell_nominal_mv = 3700;
-volatile uint16_t cell_charged_mv = 4200;
-volatile uint16_t cell_discharged_mv = 3000;
+volatile uint16_t cell_nominal_mv ;
+volatile uint16_t cell_charged_mv ;
+volatile uint16_t cell_discharged_mv ;
 uint8_t display_active = 0;
 volatile float cell_voltages[5];
 uint8_t tx_buffer[12];
 volatile uint8_t charge_state; // 0- Idle, 1- charging, 2- discharging
-uint32_t last_voltages_base_addr = 0x08040000;
+volatile uint32_t last_voltages_base_addr = 0x08040000;
+volatile uint32_t nominal_cell_mv_addr = 0x08041000;
+volatile uint32_t charged_cell_mv_addr = 0x08042000;
+volatile uint32_t discharged_cell_mv_addr = 0x08043000;
+volatile uint32_t capacity_addr = 0x08044000;
+volatile uint32_t C_rating_addr= 0x08045000;
+volatile uint32_t type_addr = 0x08046000;
+volatile uint32_t nickname_addr = 0x08047000;
 uint8_t toggle_for_charge;
 uint8_t toggle_for_discharge;
+volatile uint16_t lowest_mv;
 volatile uint16_t present_net_mv;
 volatile uint16_t last_net_mv;
+volatile uint8_t data_received;
+volatile uint16_t capacity;
+volatile uint8_t C_rating;
+volatile uint8_t type; //0 - Li-ion. 1- Li-po, 2- Solid state
+volatile char nickname[15];
 
 /* USER CODE END PV */
 
@@ -94,14 +107,14 @@ void stop_display(void);
 void EnterLowPowerStandby(void);
 void PrepareVoltageData(void);
 void RTC_Wakeup_After(uint32_t period_seconds);
+void Flash_WriteString(uint32_t address, const char* str);
+void Flash_ReadString(uint32_t address, char* buffer);
 HAL_StatusTypeDef RTC_EnableWakeUpInterrupt(void);
 
 
 uint8_t update_state(void);
 uint16_t read_from_flash(uint32_t address);
 HAL_StatusTypeDef write_to_flash(uint32_t address, uint16_t data);
-extern void Go_standby();
-extern void BLE_exit();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -155,6 +168,7 @@ int main(void)
 	TIM16->SR = ~TIM_SR_UIF;  // Clear update interrupt flag
 	TIM16->CNT = 0;
 	last_net_mv = read_from_flash(last_voltages_base_addr);
+
   /* USER CODE END 2 */
 
   /* Init code for STM32_WPAN */
@@ -176,7 +190,7 @@ int main(void)
 			write_to_flash(last_voltages_base_addr, present_net_mv);
 			HAL_RTC_DeInit(&hrtc);
 			MX_RTC_Init();
-			RTC_Wakeup_After(30);
+			RTC_Wakeup_After(60);
 			HAL_SuspendTick();
 			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
 			SystemClock_Config();
@@ -184,7 +198,10 @@ int main(void)
 		} else {
 			if (connection_status == 1) {
 			} else {
-					//get_voltage();
+					get_voltage();
+					cell_nominal_mv = read_from_flash(nominal_cell_mv_addr);
+					cell_charged_mv = read_from_flash(charged_cell_mv_addr);
+					cell_discharged_mv = read_from_flash(discharged_cell_mv_addr);
 					//update_state();
 					display();
 			}
@@ -791,30 +808,23 @@ void get_voltage(void) {
 }
 
 void display(void) {
-	uint16_t lowest_mv;
-	for (int i = 1; i <= 5; i++) {
-		if (cell_mv[i] < cell_mv[i - 1]) {
-			lowest_mv = cell_mv[i];
-		} else {
-			lowest_mv = cell_mv[i - 1];
-		}
-	}
 
-		if (lowest_mv > cell_nominal_mv && lowest_mv < cell_charged_mv) {
+
+		if (present_net_mv > cell_nominal_mv*6 && present_net_mv < cell_charged_mv*6) {
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, SET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, SET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, RESET);
 
-		} else if (lowest_mv < cell_nominal_mv
-				&& lowest_mv > cell_discharged_mv) {
+		} else if (present_net_mv < cell_nominal_mv*6
+				&& present_net_mv > cell_discharged_mv*6) {
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, SET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, RESET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, SET);
-		} else if (lowest_mv < cell_discharged_mv) {
+		} else if (present_net_mv < cell_discharged_mv*6) {
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, RESET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, RESET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, SET);
-		} else if (lowest_mv == cell_charged_mv || lowest_mv > cell_charged_mv - 20)
+		} else if (present_net_mv == cell_charged_mv*6 || present_net_mv > cell_charged_mv*6 - 120)
 		{
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, RESET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, SET);
@@ -859,6 +869,40 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		}
 	}
 }
+
+
+void Flash_WriteString(uint32_t address, const char* str) {
+    uint64_t data;
+    uint32_t i;
+
+    if (strlen(str) > MAX_STRING_LEN) return;
+
+    /* Erase flash page */
+    FLASH_EraseInitTypeDef eraseInit = {FLASH_TYPEERASE_PAGES, (address - FLASH_BASE) / 0x1000, 1};
+    uint32_t pageError;
+    HAL_FLASH_Unlock();
+    HAL_FLASHEx_Erase(&eraseInit, &pageError);
+
+    /* Write string */
+    for (i = 0; i < strlen(str) + 1; i += 8) {
+        memset(&data, 0xFF, sizeof(data));
+        memcpy(&data, &str[i], (i + 8 <= strlen(str) + 1) ? 8 : strlen(str) + 1 - i);
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address + i, data);
+    }
+    HAL_FLASH_Lock();
+}
+
+/* Read string from flash at specified address */
+void Flash_ReadString(uint32_t address, char* buffer) {
+    uint32_t i;
+    for (i = 0; i < MAX_STRING_LEN - 1; i++) {
+        buffer[i] = *(volatile uint8_t*)(address + i);
+        if (buffer[i] == '\0') break;
+    }
+    buffer[i] = '\0';
+}
+
+
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == GPIO_PIN_6) {

@@ -24,6 +24,7 @@
 
 /* USER CODE BEGIN Includes */
 #include "stm32wbxx_hal_adc.h"
+#include "stm32wbxx_hal_gpio.h"
 #include "main.h"
 /* USER CODE END Includes */
 
@@ -66,7 +67,7 @@ extern uint16_t Connection_Handle;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-uint16_t SizeMycharwrite = 1;
+uint16_t SizeMycharwrite = 247;
 uint16_t SizeMycharnotify = 247;
 
 /**
@@ -79,7 +80,21 @@ static CustomContext_t CustomContext;
  */
 
 /* USER CODE BEGIN PV */
-
+volatile uint8_t configurable = 1;
+extern volatile uint16_t capacity;
+extern volatile uint8_t C_rating;
+extern volatile uint8_t type; //0 - Li-ion. 1- Li-po, 2- Solid state
+extern volatile char nickname[20];
+extern volatile uint16_t cell_nominal_mv ;
+extern volatile uint16_t cell_charged_mv ;
+extern volatile uint16_t cell_discharged_mv ;
+extern volatile uint32_t nominal_cell_mv_addr ;
+extern volatile uint32_t charged_cell_mv_addr ;
+extern volatile uint32_t discharged_cell_mv_addr;
+extern volatile uint32_t nickname_addr;
+extern volatile uint32_t capacity_addr;
+extern volatile uint32_t C_rating_addr;
+extern volatile uint32_t type_addr;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -193,8 +208,27 @@ static SVCCTL_EvtAckStatus_t Custom_STM_Event_Handler(void *Event)
           {
             return_value = SVCCTL_EvtAckFlowEnable;
             /* USER CODE BEGIN CUSTOM_STM_Service_1_Char_1_ACI_GATT_ATTRIBUTE_MODIFIED_VSEVT_CODE */
-        if(attribute_modified->Attr_Data[0] == 'A'){
-        		HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_5);
+        if(attribute_modified->Attr_Data[0] == 'X' && configurable != 0){
+
+        	//HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_5);
+
+        	capacity = (uint16_t)attribute_modified->Attr_Data[1]<<8 | attribute_modified->Attr_Data[2];
+        	C_rating = attribute_modified->Attr_Data[3];
+        	type = attribute_modified->Attr_Data[4];
+        	cell_nominal_mv = attribute_modified->Attr_Data[5] <<8 | attribute_modified->Attr_Data[6];
+        	cell_charged_mv = attribute_modified->Attr_Data[7] <<8 | attribute_modified->Attr_Data[8];
+        	cell_discharged_mv = attribute_modified->Attr_Data[9] <<8 | attribute_modified->Attr_Data[10];
+        	write_to_flash(nominal_cell_mv_addr, cell_nominal_mv);
+        	write_to_flash(charged_cell_mv_addr, cell_charged_mv);
+        	write_to_flash(discharged_cell_mv_addr, cell_discharged_mv);
+        	write_to_flash(C_rating_addr,C_rating);
+        	write_to_flash(capacity_addr,capacity);
+        	write_to_flash(type_addr,type);
+        	for(int i =0 ; i<= 15; i++)
+        	{
+        		nickname[i] = attribute_modified->Attr_Data[10+i];
+        	}
+        	Flash_WriteString(nickname_addr,nickname);
            }
             else
             {}
@@ -339,7 +373,7 @@ void SVCCTL_InitCustomSvc(void)
                           ATTR_PERMISSION_NONE,
                           GATT_NOTIFY_ATTRIBUTE_WRITE,
                           0x10,
-                          CHAR_VALUE_LEN_CONSTANT,
+                          CHAR_VALUE_LEN_VARIABLE,
                           &(CustomContext.CustomMycharwriteHdle));
   if (ret != BLE_STATUS_SUCCESS)
   {

@@ -83,6 +83,20 @@ extern uint16_t cell_mv[5];
 extern uint8_t sleep_flag;
 extern uint8_t charge_state;
 extern uint16_t last_net_mv;
+extern volatile uint16_t capacity;
+extern volatile uint32_t nominal_cell_mv_addr;
+extern volatile uint32_t charged_cell_mv_addr;
+extern volatile uint32_t discharged_cell_mv_addr;
+extern volatile uint32_t capacity_addr;
+extern volatile uint32_t C_rating_addr;
+extern volatile uint32_t type_addr;
+extern volatile uint16_t cell_nominal_mv ;
+extern volatile uint16_t cell_charged_mv ;
+extern volatile uint16_t cell_discharged_mv ;
+extern volatile uint16_t lowest_mv;
+extern volatile uint8_t type;
+extern volatile uint16_t capacity;
+extern volatile uint8_t C_rating;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -136,11 +150,28 @@ void myTask(void)
 
 		  UpdateCharData[12] = uid_word0 >> 24;
 		  UpdateCharData[13] = uid_word0 >> 16;
-		  UpdateCharData[14] = uid_word0 >> 8;
-		  UpdateCharData[15] = uid_word0;
-		  UpdateCharData[16] = update_state();
-		  UpdateCharData[17] = last_net_mv>>8;
-		  UpdateCharData[18] = last_net_mv;
+		  UpdateCharData[14] = update_state();
+
+		  capacity = read_from_flash(capacity_addr);
+		  UpdateCharData[15] = capacity>>8;
+		  UpdateCharData[16] = capacity;
+
+		  cell_nominal_mv = read_from_flash(nominal_cell_mv_addr);
+		  cell_charged_mv = read_from_flash(charged_cell_mv_addr);
+		  cell_discharged_mv = read_from_flash(discharged_cell_mv_addr);
+
+		  UpdateCharData[17] = cell_nominal_mv>>8;
+		  UpdateCharData[18] = cell_nominal_mv;
+		  UpdateCharData[19] = cell_charged_mv>>8;
+		  UpdateCharData[20] = cell_charged_mv;
+		  UpdateCharData[21] = cell_discharged_mv>>8;
+		  UpdateCharData[22] = cell_discharged_mv;
+
+		  type = (uint8_t)read_from_flash(type_addr);
+		  C_rating = (uint8_t)read_from_flash(C_rating_addr);
+
+		  UpdateCharData[23] = type;
+		  UpdateCharData[24] = C_rating;
 
 		  Custom_Mycharnotify_Update_Char();
 if(sleep_flag == 1){

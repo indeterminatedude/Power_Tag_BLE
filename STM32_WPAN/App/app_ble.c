@@ -226,14 +226,15 @@ uint8_t index_con_int, mutex;
 /**
  * Advertising Data
  */
-uint8_t a_AdvData[11] =
+uint8_t a_AdvData[18] =
 {
-  10, AD_TYPE_COMPLETE_LOCAL_NAME, 'P', 'o', 'w', 'e', 'r', '_', 'T', 'a', 'g',  /* Complete name */
+  17, AD_TYPE_COMPLETE_LOCAL_NAME, 'P', 'o', 'w', 'e', 'r', '_', 'T', 'a', 'g', '_', 'B', 'L', 'E', '_', 'V', '1',  /* Complete name */
 
 };
 
 /* USER CODE BEGIN PV */
 volatile uint8_t connection_status = 0;
+extern volatile uint32_t nickname_addr;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -1014,7 +1015,6 @@ static void Adv_Request(APP_BLE_ConnStatus_t NewStatus)
   }
 
 /* USER CODE BEGIN Adv_Request_1*/
-
 /* USER CODE END Adv_Request_1*/
 
   /* Update Advertising data */
@@ -1265,6 +1265,9 @@ void SVCCTL_ResumeUserEventFlow(void)
 }
 
 /* USER CODE BEGIN FD_WRAP_FUNCTIONS */
+
+
+
 void Go_standby()
 {
 

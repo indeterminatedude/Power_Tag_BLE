@@ -6,12 +6,12 @@
 ../Drivers/STM32WBxx_HAL_Driver/Inc/stm32wbxx_ll_system.h:2235:26:LL_FLASH_GetDeviceID	4	static
 ../Drivers/STM32WBxx_HAL_Driver/Inc/stm32wbxx_ll_system.h:2247:26:LL_FLASH_GetSTCompanyID	4	static
 ../Middlewares/ST/STM32_WPAN/ble/core/ble_legacy.h:276:12:aci_hal_stack_reset	8	static
-../STM32_WPAN/App/app_ble.c:263:6:APP_BLE_Init	80	static
-../STM32_WPAN/App/app_ble.c:412:28:SVCCTL_App_Notification	56	static
-../STM32_WPAN/App/app_ble.c:709:22:APP_BLE_Get_Server_Connection_Status	4	static
-../STM32_WPAN/App/app_ble.c:723:13:Ble_Tl_Init	16	static
-../STM32_WPAN/App/app_ble.c:734:13:Ble_Hci_Gap_Gatt_Init	72	static
-../STM32_WPAN/App/app_ble.c:990:13:Adv_Request	56	static
+../STM32_WPAN/App/app_ble.c:264:6:APP_BLE_Init	80	static
+../STM32_WPAN/App/app_ble.c:413:28:SVCCTL_App_Notification	56	static
+../STM32_WPAN/App/app_ble.c:710:22:APP_BLE_Get_Server_Connection_Status	4	static
+../STM32_WPAN/App/app_ble.c:724:13:Ble_Tl_Init	16	static
+../STM32_WPAN/App/app_ble.c:735:13:Ble_Hci_Gap_Gatt_Init	72	static
+../STM32_WPAN/App/app_ble.c:991:13:Adv_Request	56	static
 ../STM32_WPAN/App/app_ble.c:1034:16:BleGetBdAddress	32	static
 ../STM32_WPAN/App/app_ble.c:1091:13:Adv_Cancel	16	static
 ../STM32_WPAN/App/app_ble.c:1180:6:hci_notify_asynch_evt	16	static
@@ -20,5 +20,5 @@
 ../STM32_WPAN/App/app_ble.c:1201:13:BLE_UserEvtRx	24	static
 ../STM32_WPAN/App/app_ble.c:1221:13:BLE_StatusNot	24	static
 ../STM32_WPAN/App/app_ble.c:1260:6:SVCCTL_ResumeUserEventFlow	8	static
-../STM32_WPAN/App/app_ble.c:1268:6:Go_standby	8	static
-../STM32_WPAN/App/app_ble.c:1301:6:BLE_exit	16	static
+../STM32_WPAN/App/app_ble.c:1271:6:Go_standby	8	static
+../STM32_WPAN/App/app_ble.c:1304:6:BLE_exit	16	static
