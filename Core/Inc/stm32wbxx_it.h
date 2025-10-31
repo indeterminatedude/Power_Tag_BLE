@@ -58,6 +58,7 @@ void SysTick_Handler(void);
 void EXTI9_5_IRQHandler(void);
 void TIM2_IRQHandler(void);
 void I2C1_EV_IRQHandler(void);
+void I2C1_ER_IRQHandler(void);
 void RTC_Alarm_IRQHandler(void);
 void IPCC_C1_RX_IRQHandler(void);
 void IPCC_C1_TX_IRQHandler(void);

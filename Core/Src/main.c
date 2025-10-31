@@ -60,13 +60,12 @@ TIM_HandleTypeDef htim2;
 /* USER CODE BEGIN PV */
 volatile uint32_t count = 0;
 volatile uint8_t sleep_flag = 0;
-volatile uint16_t cell_mv[5];
+volatile uint16_t cell_mv[6];
 volatile uint16_t cell_nominal_mv ;
 volatile uint16_t cell_charged_mv ;
 volatile uint16_t cell_discharged_mv ;
 uint8_t display_active = 0;
-volatile float cell_voltages[5];
-uint8_t tx_buffer[12];
+volatile float cell_voltages[6];
 volatile uint8_t charge_state; // 0- Idle, 1- charging, 2- discharging
 volatile uint32_t last_voltages_base_addr = 0x08040000;
 volatile uint32_t nominal_cell_mv_addr = 0x08041000;
@@ -86,6 +85,10 @@ volatile uint16_t capacity;
 volatile uint8_t C_rating;
 volatile uint8_t type; //0 - Li-ion. 1- Li-po, 2- Solid state
 volatile char nickname[15];
+uint8_t rx_byte;
+uint8_t tx_buffer[2];
+uint8_t current_command = 0;
+uint16_t uid_word0;
 
 /* USER CODE END PV */
 
@@ -168,6 +171,11 @@ int main(void)
 	TIM16->SR = ~TIM_SR_UIF;  // Clear update interrupt flag
 	TIM16->CNT = 0;
 	last_net_mv = read_from_flash(last_voltages_base_addr);
+	if(HAL_I2C_EnableListen_IT(&hi2c1) != HAL_OK)
+	{
+		Error_Handler();
+	}
+
 
   /* USER CODE END 2 */
 
@@ -178,6 +186,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	HAL_TIM_Base_Start_IT(&htim2);
 	update_state();
+	uid_word0 = HAL_GetUIDw2();
+	capacity = read_from_flash(capacity_addr);
+
 	while (1) {
 		if (sleep_flag == 1) {
 			stop_display();
@@ -202,7 +213,7 @@ int main(void)
 					cell_nominal_mv = read_from_flash(nominal_cell_mv_addr);
 					cell_charged_mv = read_from_flash(charged_cell_mv_addr);
 					cell_discharged_mv = read_from_flash(discharged_cell_mv_addr);
-					//update_state();
+					update_state();
 					display();
 			}
 		}
@@ -327,7 +338,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.NbrOfConversion = 6;
   hadc1.Init.DiscontinuousConvMode = ENABLE;
-  hadc1.Init.NbrOfDiscConversion = 1;
+  hadc1.Init.NbrOfDiscConversion = 6;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = DISABLE;
@@ -418,7 +429,7 @@ static void MX_I2C1_Init(void)
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
   hi2c1.Init.Timing = 0x00B07CB4;
-  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.OwnAddress1 = 22;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
   hi2c1.Init.OwnAddress2 = 0;
@@ -520,8 +531,8 @@ static void MX_RTC_Init(void)
   */
   hrtc.Instance = RTC;
   hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.AsynchPrediv = CFG_RTC_ASYNCH_PRESCALER;
+  hrtc.Init.SynchPrediv = CFG_RTC_SYNCH_PRESCALER;
   hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
   hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
   hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
@@ -769,43 +780,89 @@ void get_voltage(void) {
 	if (ret != HAL_OK) {
 		Error_Handler();
 	}
+int startup = 0;
+for(int i =0; i <= 5; i++)
+{
+	if(cell_voltages[i] == 0)
+	{
+		startup = 1;
+		break;
+	}else
+	{
+		startup = 0;
+	}
+
+	}
 
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 100);
+	if(startup){
 	cell_voltages[0] = HAL_ADC_GetValue(&hadc1);
+	}else
+	{
+		cell_voltages[0] = (0.95*cell_voltages[0] + (0.05*HAL_ADC_GetValue(&hadc1)));
+	}
 	HAL_ADC_Stop(&hadc1);
 
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 100);
-	cell_voltages[1] = HAL_ADC_GetValue(&hadc1);
+	if(startup){
+		cell_voltages[1] = HAL_ADC_GetValue(&hadc1);
+		}else
+		{
+			cell_voltages[1] = (0.95*cell_voltages[1] + (0.05*HAL_ADC_GetValue(&hadc1)));
+		}
 	HAL_ADC_Stop(&hadc1);
 
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 100);
-	cell_voltages[2] = HAL_ADC_GetValue(&hadc1);
+	if(startup){
+		cell_voltages[2] = HAL_ADC_GetValue(&hadc1);
+		}else
+		{
+			cell_voltages[2] = (0.95*cell_voltages[2] + (0.05*HAL_ADC_GetValue(&hadc1)));
+		}
 	HAL_ADC_Stop(&hadc1);
 
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 100);
-	cell_voltages[3] = HAL_ADC_GetValue(&hadc1);
+	if(startup){
+		cell_voltages[3] = HAL_ADC_GetValue(&hadc1);
+		}else
+		{
+			cell_voltages[3] = (0.95*cell_voltages[3] + (0.05*HAL_ADC_GetValue(&hadc1)));
+		}
 	HAL_ADC_Stop(&hadc1);
 
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 100);
-	cell_voltages[4] = HAL_ADC_GetValue(&hadc1);
+	if(startup){
+		cell_voltages[4] = HAL_ADC_GetValue(&hadc1);
+		}else
+		{
+			cell_voltages[4] = (0.95*cell_voltages[4] + (0.05*HAL_ADC_GetValue(&hadc1)));
+		}
 	HAL_ADC_Stop(&hadc1);
 
 	HAL_ADC_Start(&hadc1);
 	HAL_ADC_PollForConversion(&hadc1, 100);
-	cell_voltages[5] = HAL_ADC_GetValue(&hadc1);
+	if(startup){
+		cell_voltages[5] = HAL_ADC_GetValue(&hadc1);
+		}else
+		{
+			cell_voltages[5] = (0.95*cell_voltages[5] + (0.05*HAL_ADC_GetValue(&hadc1)));
+		}
 	HAL_ADC_Stop(&hadc1);
+
 
 	for (int i = 0; i <= 5; i++) {
-		cell_mv[i] = (cell_voltages[i] / 4095) * 2 * 2500;
+		cell_mv[i] = (cell_voltages[i] / 4095) * 2 * 2570;
 	}
-	present_net_mv = cell_mv[0] + cell_mv[1] + cell_mv[2] + cell_mv[3]
-			+ cell_mv[4] + cell_mv[5];
+
+	present_net_mv = cell_mv[0] + cell_mv[1] + cell_mv[2] + cell_mv[3] + cell_mv[4] + cell_mv[5];
+
 }
+
 
 void display(void) {
 
@@ -851,6 +908,65 @@ uint8_t update_state(void) {
 		charge_state = 0;
 		return charge_state;
 	}
+}
+
+void prepare_data() {
+    uint16_t value = 0;
+    switch (current_command) {
+    		case 0x09:  // Total Voltage (sum of cells)
+              value = present_net_mv;
+              break;
+            case 0x1C:
+              value = uid_word0;
+              break;
+            case 0x10:
+            	value = capacity;
+              break;
+        case 0x3F: value = cell_mv[0]; break;  // Cell 1
+        case 0x3E: value = cell_mv[1]; break;  // Cell 2
+        case 0x3D: value = cell_mv[2]; break;  // Cell 3
+        case 0x3C: value = cell_mv[3]; break;  // Cell 4
+        case 0x3B: value = cell_mv[4]; break;  // Cell 5
+        case 0x3A: value = cell_mv[5]; break;  // Cell 6
+
+    }
+    tx_buffer[0] = value & 0xFF;  // Low byte
+    tx_buffer[1] = (value >> 8) & 0xFF;  // High byte
+}
+
+
+void HAL_I2C_AddrCallback(I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode) {
+    //UNUSED(AddrMatchCode);
+
+    if (TransferDirection == I2C_DIRECTION_TRANSMIT) {
+        HAL_I2C_Slave_Sequential_Receive_IT(hi2c, &rx_byte, 1, I2C_FIRST_FRAME);
+        current_command = rx_byte;
+    } else {
+        prepare_data();
+        HAL_I2C_Slave_Sequential_Transmit_IT(hi2c, tx_buffer, 2, I2C_FIRST_AND_LAST_FRAME);
+    }
+}
+
+// I2C Slave Receive Complete
+void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+    current_command = rx_byte;
+    count = 0;
+    HAL_I2C_EnableListen_IT(hi2c);
+}
+
+// I2C Slave Transmit Complete
+void HAL_I2C_SlaveTxCpltCallback(I2C_HandleTypeDef *hi2c) {
+    HAL_I2C_EnableListen_IT(hi2c);
+}
+
+// I2C Error Callback
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
+    HAL_I2C_EnableListen_IT(hi2c);
+}
+
+void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+	HAL_I2C_EnableListen_IT(hi2c);
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
