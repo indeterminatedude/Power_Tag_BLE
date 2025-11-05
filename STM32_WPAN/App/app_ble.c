@@ -226,10 +226,10 @@ uint8_t index_con_int, mutex;
 /**
  * Advertising Data
  */
-uint8_t a_AdvData[18] =
+uint8_t a_AdvData[24] =
 {
   17, AD_TYPE_COMPLETE_LOCAL_NAME, 'P', 'o', 'w', 'e', 'r', '_', 'T', 'a', 'g', '_', 'B', 'L', 'E', '_', 'V', '1',  /* Complete name */
-
+  5, AD_TYPE_MANUFACTURER_SPECIFIC_DATA, 0x00, 0x30, 0x00 /* UID_1 */, 0x00 /* UID_2 */,
 };
 
 /* USER CODE BEGIN PV */
@@ -1015,6 +1015,9 @@ static void Adv_Request(APP_BLE_ConnStatus_t NewStatus)
   }
 
 /* USER CODE BEGIN Adv_Request_1*/
+  uint32_t uid_word0 = HAL_GetUIDw2();
+  a_AdvData[22] = uid_word0>>24;
+  a_AdvData[23] = uid_word0>>16;
 /* USER CODE END Adv_Request_1*/
 
   /* Update Advertising data */

@@ -97,6 +97,8 @@ extern volatile uint16_t lowest_mv;
 extern volatile uint8_t type;
 extern volatile uint16_t capacity;
 extern volatile uint8_t C_rating;
+extern volatile uint32_t nickname_addr;
+extern volatile uint8_t nickname[16];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -172,6 +174,12 @@ void myTask(void)
 
 		  UpdateCharData[23] = type;
 		  UpdateCharData[24] = C_rating;
+
+		  Flash_ReadString(nickname_addr,nickname);
+		  for(int i =0; i <=16; i++)
+		  {
+			  UpdateCharData[25+i] =nickname[i];
+		  }
 
 		  Custom_Mycharnotify_Update_Char();
 if(sleep_flag == 1){

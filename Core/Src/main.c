@@ -84,11 +84,12 @@ volatile uint8_t data_received;
 volatile uint16_t capacity;
 volatile uint8_t C_rating;
 volatile uint8_t type; //0 - Li-ion. 1- Li-po, 2- Solid state
-volatile char nickname[15];
+volatile uint8_t nickname[16];
 uint8_t rx_byte;
 uint8_t tx_buffer[2];
 uint8_t current_command = 0;
 uint16_t uid_word0;
+extern volatile uint8_t a_AdvData[24];
 
 /* USER CODE END PV */
 
@@ -187,6 +188,7 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim2);
 	update_state();
 	uid_word0 = HAL_GetUIDw2();
+
 	capacity = read_from_flash(capacity_addr);
 
 	while (1) {
@@ -201,7 +203,7 @@ int main(void)
 			write_to_flash(last_voltages_base_addr, present_net_mv);
 			HAL_RTC_DeInit(&hrtc);
 			MX_RTC_Init();
-			RTC_Wakeup_After(60);
+			RTC_Wakeup_After(2);
 			HAL_SuspendTick();
 			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
 			SystemClock_Config();
@@ -353,7 +355,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_6;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -531,8 +533,8 @@ static void MX_RTC_Init(void)
   */
   hrtc.Instance = RTC;
   hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = CFG_RTC_ASYNCH_PRESCALER;
-  hrtc.Init.SynchPrediv = CFG_RTC_SYNCH_PRESCALER;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
   hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
   hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
   hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
@@ -856,7 +858,7 @@ for(int i =0; i <= 5; i++)
 
 
 	for (int i = 0; i <= 5; i++) {
-		cell_mv[i] = (cell_voltages[i] / 4095) * 2 * 2570;
+		cell_mv[i] = (cell_voltages[i] / 4095) * 2 * 2500;
 	}
 
 	present_net_mv = cell_mv[0] + cell_mv[1] + cell_mv[2] + cell_mv[3] + cell_mv[4] + cell_mv[5];
@@ -1053,7 +1055,8 @@ void Enable_RTC_Wakeup_Interrupt(void) {
 
 
 
-void RTC_Wakeup_After(uint32_t period_seconds)
+
+void RTC_Wakeup_After(uint32_t min)
 {
     RTC_AlarmTypeDef sAlarm = {0};
     RTC_TimeTypeDef sTime = {0};
@@ -1064,9 +1067,9 @@ void RTC_Wakeup_After(uint32_t period_seconds)
     HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
     // Calculate new seconds and minutes with overflow handling
-    uint32_t total_seconds = sTime.Seconds + period_seconds;
+    uint32_t total_seconds = sTime.Seconds;
     sAlarm.AlarmTime.Seconds = total_seconds % 60;
-    uint32_t total_minutes = sTime.Minutes + (total_seconds / 60);
+    uint32_t total_minutes = sTime.Minutes + min;
     sAlarm.AlarmTime.Minutes = total_minutes % 60;
     uint32_t total_hours = sTime.Hours + (total_minutes / 60);
     sAlarm.AlarmTime.Hours = total_hours % 24;
