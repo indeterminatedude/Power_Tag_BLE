@@ -226,7 +226,7 @@ static SVCCTL_EvtAckStatus_t Custom_STM_Event_Handler(void *Event)
         	write_to_flash(type_addr,type);
         	for(int i =0 ; i<= 15; i++)
         	{
-        		nickname[i] = attribute_modified->Attr_Data[10+i];
+        		nickname[i] = attribute_modified->Attr_Data[11+i];
         	}
         	Flash_WriteString(nickname_addr,nickname);
            }

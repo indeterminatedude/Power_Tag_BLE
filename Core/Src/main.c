@@ -186,6 +186,8 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	HAL_TIM_Base_Start_IT(&htim2);
+	//get_voltage();
+	//get_voltage();
 	update_state();
 	uid_word0 = HAL_GetUIDw2();
 
@@ -355,7 +357,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_6;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_92CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -900,10 +902,10 @@ void stop_display(void) {
 uint8_t update_state(void) {
 	last_net_mv = read_from_flash(last_voltages_base_addr);
 	get_voltage();
-	if (present_net_mv > last_net_mv + 10) { //charging
+	if (present_net_mv > last_net_mv + 15) { //charging
 		charge_state = 1;
 		return charge_state;
-	} else if (present_net_mv + 10 < last_net_mv) { //discharging
+	} else if (present_net_mv + 10< last_net_mv) { //discharging
 		charge_state = 2;
 		return charge_state;
 	} else { //Idle
