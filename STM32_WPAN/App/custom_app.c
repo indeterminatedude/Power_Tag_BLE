@@ -152,7 +152,7 @@ void myTask(void)
 
 		  UpdateCharData[12] = uid_word0 >> 24;
 		  UpdateCharData[13] = uid_word0 >> 16;
-		  UpdateCharData[14] = update_state();
+		  //UpdateCharData[14] = update_state();
 
 		  capacity = read_from_flash(capacity_addr);
 		  UpdateCharData[15] = capacity>>8;

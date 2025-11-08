@@ -75,6 +75,10 @@ volatile uint32_t capacity_addr = 0x08044000;
 volatile uint32_t C_rating_addr= 0x08045000;
 volatile uint32_t type_addr = 0x08046000;
 volatile uint32_t nickname_addr = 0x08047000;
+uint32_t cycle_count_addr = 0x08048000;
+uint32_t data_addr = 0x08049000;
+float data;
+float cycle_count;
 uint8_t toggle_for_charge;
 uint8_t toggle_for_discharge;
 volatile uint16_t lowest_mv;
@@ -89,6 +93,7 @@ uint8_t rx_byte;
 uint8_t tx_buffer[2];
 uint8_t current_command = 0;
 uint16_t uid_word0;
+float increment;
 extern volatile uint8_t a_AdvData[24];
 
 /* USER CODE END PV */
@@ -118,7 +123,10 @@ HAL_StatusTypeDef RTC_EnableWakeUpInterrupt(void);
 
 uint8_t update_state(void);
 uint16_t read_from_flash(uint32_t address);
-HAL_StatusTypeDef write_to_flash(uint32_t address, uint16_t data);
+HAL_StatusTypeDef write_to_flash(uint32_t address, uint32_t data);
+uint32_t read_from_flash_32(uint32_t addr);
+HAL_StatusTypeDef write_float_to_flash(uint32_t address, float data);
+float read_float_from_flash(uint32_t address);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -188,6 +196,9 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim2);
 	//get_voltage();
 	//get_voltage();
+	cell_nominal_mv = read_from_flash(nominal_cell_mv_addr);
+	cell_charged_mv = read_from_flash(charged_cell_mv_addr);
+	cell_discharged_mv = read_from_flash(discharged_cell_mv_addr);
 	update_state();
 	uid_word0 = HAL_GetUIDw2();
 
@@ -205,7 +216,7 @@ int main(void)
 			write_to_flash(last_voltages_base_addr, present_net_mv);
 			HAL_RTC_DeInit(&hrtc);
 			MX_RTC_Init();
-			RTC_Wakeup_After(2);
+			RTC_Wakeup_After(5);
 			HAL_SuspendTick();
 			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
 			SystemClock_Config();
@@ -217,7 +228,7 @@ int main(void)
 					cell_nominal_mv = read_from_flash(nominal_cell_mv_addr);
 					cell_charged_mv = read_from_flash(charged_cell_mv_addr);
 					cell_discharged_mv = read_from_flash(discharged_cell_mv_addr);
-					update_state();
+					//update_state();
 					display();
 			}
 		}
@@ -699,7 +710,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-HAL_StatusTypeDef write_to_flash(uint32_t address, uint16_t data) {
+HAL_StatusTypeDef write_to_flash(uint32_t address, uint32_t data) {
 	HAL_StatusTypeDef status;
 
 	// Validate address: must be within flash range and 8-byte aligned for double-word write
@@ -749,6 +760,80 @@ HAL_StatusTypeDef write_to_flash(uint32_t address, uint16_t data) {
 }
 
 
+HAL_StatusTypeDef write_float_to_flash(uint32_t address, float data)
+{
+    HAL_StatusTypeDef status;
+
+    /* ------------------------------------------------------------------ */
+    /* 1. Address validation – must be inside flash and 8-byte aligned   */
+    /* ------------------------------------------------------------------ */
+    if (address < FLASH_BASE ||
+        address >= (FLASH_BASE + FLASH_SIZE) ||
+        (address % 8) != 0)                     /* double-word alignment */
+    {
+        return HAL_ERROR;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 2. Unlock flash                                                   */
+    /* ------------------------------------------------------------------ */
+    status = HAL_FLASH_Unlock();
+    if (status != HAL_OK) return status;
+
+    /* ------------------------------------------------------------------ */
+    /* 3. Erase the page that contains the address                       */
+    /* ------------------------------------------------------------------ */
+    FLASH_EraseInitTypeDef erase = {
+        .TypeErase = FLASH_TYPEERASE_PAGES,
+        .Page      = (address - FLASH_BASE) / FLASH_PAGE_SIZE,
+        .NbPages   = 1
+    };
+    uint32_t page_error = 0;
+    status = HAL_FLASHEx_Erase(&erase, &page_error);
+    if (status != HAL_OK || page_error != 0xFFFFFFFFU)
+    {
+        HAL_FLASH_Lock();
+        return HAL_ERROR;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 4. Clear any pending error flags                                   */
+    /* ------------------------------------------------------------------ */
+    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS);
+
+    /* ------------------------------------------------------------------ */
+    /* 5. Pack the 32-bit float into a 64-bit double-word                */
+    /* ------------------------------------------------------------------ */
+    uint32_t  float_as_u32 = *((uint32_t *)&data);   /* bit-wise copy */
+    uint64_t  dw_to_write  = ((uint64_t)float_as_u32) | ((uint64_t)0xFFFFFFFFULL << 32);
+    /*   low  32 bits : the float
+         high 32 bits : padding (0xFFFFFFFF) – erased state of flash */
+
+    /* ------------------------------------------------------------------ */
+    /* 6. Program the double-word                                         */
+    /* ------------------------------------------------------------------ */
+    status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD,
+                               address,
+                               dw_to_write);
+    if (status != HAL_OK)
+    {
+        HAL_FLASH_Lock();
+        return status;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 7. Lock flash again                                                */
+    /* ------------------------------------------------------------------ */
+    status = HAL_FLASH_Lock();
+    return (status == HAL_OK) ? HAL_OK : status;
+}
+
+
+float read_float_from_flash(uint32_t address) {
+    uint32_t word = *((__IO uint32_t*)address);   // Read 32-bit word
+    return *((float*)&word);                      // Reinterpret as float
+}
+
 uint16_t read_from_flash(uint32_t address) {
     // Validate address
     if (address < FLASH_BASE ||
@@ -759,6 +844,22 @@ uint16_t read_from_flash(uint32_t address) {
 
     // Return the 16-bit value directly
     return *(uint16_t*)address;
+}
+
+uint32_t read_from_flash_32(uint32_t addr)
+{
+    /* Safety checks ----------------------------------------------------------*/
+    if (addr < FLASH_BASE) {
+        /* Address is not in Flash */
+        return 0xFFFFFFFFU;
+    }
+    if ((addr & 0x03U) != 0U) {
+        /* Not 4-byte aligned -> HardFault if accessed directly */
+        return 0xFFFFFFFFU;
+    }
+
+    /* Direct volatile read – the compiler will not optimise it away */
+    return *(volatile uint32_t *)addr;
 }
 
 void PrepareVoltageData(void) {
@@ -871,7 +972,7 @@ for(int i =0; i <= 5; i++)
 void display(void) {
 
 
-		if (present_net_mv > cell_nominal_mv*6 && present_net_mv < cell_charged_mv*6) {
+		if (present_net_mv > cell_nominal_mv*6 && present_net_mv < (cell_charged_mv*6 - 120)) {
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, SET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, SET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, RESET);
@@ -885,7 +986,7 @@ void display(void) {
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, RESET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, RESET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, SET);
-		} else if (present_net_mv == cell_charged_mv*6 || present_net_mv > cell_charged_mv*6 - 120)
+		} else if (present_net_mv == cell_charged_mv*6 || present_net_mv > (cell_charged_mv*6 - 120))
 		{
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, RESET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, SET);
@@ -901,17 +1002,28 @@ void stop_display(void) {
 
 uint8_t update_state(void) {
 	last_net_mv = read_from_flash(last_voltages_base_addr);
+	cycle_count = read_float_from_flash(cycle_count_addr);
 	get_voltage();
 	if (present_net_mv > last_net_mv + 15) { //charging
-		charge_state = 1;
-		return charge_state;
-	} else if (present_net_mv + 10< last_net_mv) { //discharging
 		charge_state = 2;
-		return charge_state;
+
+	} else if (present_net_mv + 10< last_net_mv) { //discharging
+		charge_state = 1;
+
 	} else { //Idle
 		charge_state = 0;
-		return charge_state;
+
 	}
+
+	if(charge_state == 2)
+	{
+		float difference = present_net_mv - last_net_mv;
+		float range = 6*(cell_charged_mv - cell_discharged_mv);
+		increment = difference/range;
+		cycle_count = cycle_count + increment;
+		write_float_to_flash(cycle_count_addr,cycle_count);
+	}
+	return charge_state;
 }
 
 void prepare_data() {
